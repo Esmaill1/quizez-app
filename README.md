@@ -1,3 +1,13 @@
+---
+title: Quizes App
+emoji: 📚
+colorFrom: indigo
+colorTo: indigo
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # 📚 Ordering Quiz App
 
 A modern, full-stack interactive quiz application designed for **ordering/ranking questions**.
