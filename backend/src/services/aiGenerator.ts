@@ -64,14 +64,29 @@ export async function generateAIQuestion(topic: string): Promise<AIGeneratedQues
     }
 
     const data = await response.json();
-    const generatedText = data.response;
+    const generatedText = data.response || '';
     
     try {
-      const parsed: AIGeneratedQuestion = JSON.parse(generatedText);
+      // Find the first '{' and last '}' to extract only the JSON object
+      // This handles markdown blocks or reasoning text that some models might include
+      const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON object found in AI response');
+      }
+      
+      const cleanJson = jsonMatch[0];
+      const parsed: AIGeneratedQuestion = JSON.parse(cleanJson);
+      
+      // Basic validation of the required fields
+      if (!parsed.title || !Array.isArray(parsed.items) || parsed.items.length < 2) {
+        throw new Error('AI response missing required fields or has too few items');
+      }
+
       return parsed;
-    } catch (parseError) {
-      console.error('Failed to parse AI JSON response:', generatedText);
-      throw new Error('AI returned an invalid response format. Please try again.');
+    } catch (parseError: any) {
+      console.error('❌ Failed to parse AI JSON response:', generatedText);
+      console.error('🔍 Parse error detail:', parseError.message);
+      throw new Error(`AI returned an invalid response format: ${parseError.message}`);
     }
   } catch (error) {
     console.error('AI Generation error:', error);
