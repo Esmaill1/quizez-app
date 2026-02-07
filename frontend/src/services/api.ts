@@ -29,6 +29,14 @@ export function isAuthenticated() {
 }
 
 // AI Generation API
+export async function getAIModels(): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/ai/models`, {
+    headers: getHeaders(true)
+  });
+  if (!res.ok) throw new Error('Failed to fetch AI models');
+  return res.json();
+}
+
 export async function generateAIQuestion(topic: string, model?: string): Promise<any> {
   const res = await fetch(`${API_BASE}/ai/generate`, {
     method: 'POST',

@@ -13,6 +13,36 @@ export interface AIGeneratedQuestion {
 }
 
 /**
+ * Fetches available models from Ollama Cloud
+ */
+export async function listAIModels(): Promise<string[]> {
+  const cacheKey = 'ollama_models';
+  const cachedModels = cache.get<string[]>(cacheKey);
+  if (cachedModels) return cachedModels;
+
+  try {
+    const response = await fetch('https://ollama.com/api/tags', {
+      headers: API_KEY ? { 'Authorization': `Bearer ${API_KEY}` } : {}
+    });
+
+    if (!response.ok) {
+      // Fallback models if API fails
+      return [DEFAULT_MODEL, 'deepseek-v3.1:671b-cloud', 'gemma3:27b-cloud', 'gpt-oss:20b-cloud'];
+    }
+
+    const data = await response.json();
+    const models = data.models?.map((m: any) => m.name) || [];
+    
+    // Cache the list for 24 hours
+    cache.set(cacheKey, models, 86400);
+    return models;
+  } catch (error) {
+    console.error('Failed to fetch Ollama models:', error);
+    return [DEFAULT_MODEL, 'deepseek-v3.1:671b-cloud', 'gemma3:27b-cloud', 'gpt-oss:20b-cloud'];
+  }
+}
+
+/**
  * Generates an ordering question using Ollama Cloud
  */
 export async function generateAIQuestion(topic: string, model: string = DEFAULT_MODEL): Promise<AIGeneratedQuestion> {

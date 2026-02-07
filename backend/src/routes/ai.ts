@@ -1,8 +1,18 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../middleware/auth';
-import { generateAIQuestion } from '../services/aiGenerator';
+import { generateAIQuestion, listAIModels } from '../services/aiGenerator';
 
 const router = Router();
+
+// GET /api/ai/models - List available AI models
+router.get('/models', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const models = await listAIModels();
+    res.json(models);
+  } catch (error: any) {
+    res.status(500).json({ error: 'Failed to fetch models' });
+  }
+});
 
 // POST /api/ai/generate - Secure AI question generation
 router.post('/generate', requireAdmin, async (req: Request, res: Response) => {

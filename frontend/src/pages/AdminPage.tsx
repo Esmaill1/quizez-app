@@ -11,6 +11,7 @@ import {
   deleteTopic,
   deleteQuestion,
   generateAIQuestion,
+  getAIModels,
   Chapter,
   Topic,
   Question,
@@ -65,6 +66,7 @@ export default function AdminPage() {
   const [aiTopic, setAiTopic] = useState('');
   const [generating, setGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('llama3.2');
+  const [availableModels, setAvailableModels] = useState<string[]>(['llama3.2', 'deepseek-v3.1:671b-cloud', 'gemma3:27b-cloud', 'gpt-oss:20b-cloud']);
 
   useEffect(() => {
     loadData();
@@ -95,14 +97,18 @@ export default function AdminPage() {
   async function loadData() {
     try {
       setLoading(true);
-      const [chaptersData, topicsData, questionsData] = await Promise.all([
+      const [chaptersData, topicsData, questionsData, modelsData] = await Promise.all([
         getChapters(),
         getTopics(),
         getQuestions(),
+        getAIModels().catch(() => [])
       ]);
       setChapters(chaptersData);
       setTopics(topicsData);
       setQuestions(questionsData);
+      if (modelsData && modelsData.length > 0) {
+        setAvailableModels(modelsData);
+      }
     } catch (err) {
       showMessage('error', 'Failed to load data');
     } finally {
@@ -381,10 +387,9 @@ export default function AdminPage() {
                       onChange={(e) => setSelectedModel(e.target.value)}
                       disabled={generating}
                     >
-                      <option value="llama3.2">Llama 3.2 (Super Fast)</option>
-                      <option value="deepseek-v3.1:671b-cloud">DeepSeek V3 (High Quality)</option>
-                      <option value="gemma3:27b-cloud">Gemma 3 (Balanced)</option>
-                      <option value="gpt-oss:20b-cloud">GPT-OSS (Efficient)</option>
+                      {availableModels.map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
