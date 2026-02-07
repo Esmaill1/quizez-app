@@ -30,6 +30,7 @@ Create a `.env` file in the `backend/` directory:
 DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 PORT=3001
 NODE_ENV=development
+OLLAMA_API_KEY=your_ollama_cloud_key_here
 ```
 
 ### 3. Database Setup

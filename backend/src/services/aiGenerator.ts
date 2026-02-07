@@ -1,7 +1,8 @@
 import cache from './cache';
 
-const OLLAMA_API_URL = 'https://esmailx50-ollama.hf.space/api/generate';
-const MODEL_NAME = 'gemma3:4b';
+const OLLAMA_API_URL = 'https://api.ollama.com/api/generate';
+const MODEL_NAME = 'llama3.1'; // High-performance model for cloud
+const API_KEY = process.env.OLLAMA_API_KEY;
 
 export interface AIGeneratedQuestion {
   title: string;
@@ -12,10 +13,14 @@ export interface AIGeneratedQuestion {
 }
 
 /**
- * Generates an ordering question using Ollama
+ * Generates an ordering question using Ollama Cloud
  */
 export async function generateAIQuestion(topic: string): Promise<AIGeneratedQuestion> {
-  console.log(`🤖 Generating AI question for topic: "${topic}"...`);
+  console.log(`🤖 Generating AI question for topic: "${topic}" using Ollama Cloud...`);
+
+  if (!API_KEY) {
+    throw new Error('OLLAMA_API_KEY is not configured in the environment.');
+  }
 
   const prompt = `
     Task: Generate an educational ordering/ranking question about "${topic}".
@@ -41,23 +46,26 @@ export async function generateAIQuestion(topic: string): Promise<AIGeneratedQues
   try {
     const response = await fetch(OLLAMA_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${API_KEY}`
+      },
       body: JSON.stringify({
         model: MODEL_NAME,
         prompt: prompt,
         stream: false,
-        format: 'json' // Telling Ollama to return JSON
+        format: 'json'
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama API error: ${response.statusText}`);
+      const errorBody = await response.text();
+      throw new Error(`Ollama Cloud error (${response.status}): ${errorBody}`);
     }
 
     const data = await response.json();
     const generatedText = data.response;
     
-    // Attempt to parse the JSON from the response
     try {
       const parsed: AIGeneratedQuestion = JSON.parse(generatedText);
       return parsed;
