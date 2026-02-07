@@ -13,7 +13,20 @@ async function migrate() {
     await sql`DROP TABLE IF EXISTS questions CASCADE`;
     await sql`DROP TABLE IF EXISTS topics CASCADE`;
     await sql`DROP TABLE IF EXISTS chapters CASCADE`;
+    await sql`DROP TABLE IF EXISTS users CASCADE`;
     console.log('✅ Cleaned up existing tables');
+
+    // Create users table
+    await sql`
+      CREATE TABLE IF NOT EXISTS users (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username VARCHAR(255) UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role VARCHAR(50) DEFAULT 'admin',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    console.log('✅ Created users table');
 
     // Create chapters table
     await sql`
@@ -47,6 +60,10 @@ async function migrate() {
         topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
         title VARCHAR(500) NOT NULL,
         description TEXT,
+        explanation TEXT,
+        time_limit INTEGER,
+        difficulty VARCHAR(50) DEFAULT 'medium',
+        tags TEXT[],
         order_index INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
@@ -59,26 +76,12 @@ async function migrate() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
         item_text TEXT NOT NULL,
+        image_url TEXT,
         correct_position INTEGER NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       )
     `;
     console.log('✅ Created question_items table');
-
-    // Create student_answers table (stores each submission)
-    await sql`
-      CREATE TABLE IF NOT EXISTS student_answers (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-        student_session_id VARCHAR(255) NOT NULL,
-        quiz_session_id VARCHAR(255),
-        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-        total_score DECIMAL(10, 2) NOT NULL DEFAULT 0,
-        max_possible_score DECIMAL(10, 2) NOT NULL DEFAULT 0,
-        percentage DECIMAL(5, 2) NOT NULL DEFAULT 0
-      )
-    `;
-    console.log('✅ Created student_answers table');
 
     // Create quiz_sessions table (tracks a complete topic quiz attempt)
     await sql`
@@ -86,6 +89,7 @@ async function migrate() {
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
         student_session_id VARCHAR(255) NOT NULL,
+        student_nickname VARCHAR(255),
         started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         completed_at TIMESTAMP WITH TIME ZONE,
         current_question_index INTEGER NOT NULL DEFAULT 0,
@@ -97,6 +101,22 @@ async function migrate() {
       )
     `;
     console.log('✅ Created quiz_sessions table');
+
+    // Create student_answers table (stores each submission)
+    await sql`
+      CREATE TABLE IF NOT EXISTS student_answers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        question_id UUID NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+        student_session_id VARCHAR(255) NOT NULL,
+        quiz_session_id UUID REFERENCES quiz_sessions(id) ON DELETE CASCADE,
+        submitted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+        total_score DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        max_possible_score DECIMAL(10, 2) NOT NULL DEFAULT 0,
+        percentage DECIMAL(5, 2) NOT NULL DEFAULT 0,
+        time_taken INTEGER DEFAULT 0
+      )
+    `;
+    console.log('✅ Created student_answers table');
 
     // Create student_answer_items table (stores each item's result)
     await sql`

@@ -1,93 +1,129 @@
-# 🛠️ Quiz App Developer & AI Agent Guide
+# 🛠️ Developer Guide
 
-This document provides a deep-dive into the technical architecture, scoring algorithms, and development workflows of the Proximity-Based Quiz Application.
+Welcome to the **Ordering Quiz App**! This guide will help you set up your development environment, understand the project structure, and start contributing.
 
-## 🏗️ System Architecture
+## 📋 Prerequisites
 
-The project is structured as an **NPM Workspace** for unified dependency management and execution.
+- **Node.js**: v18 or higher
+- **npm**: v9 or higher
+- **PostgreSQL Database**: We use [Neon](https://neon.tech) (serverless Postgres), but any PostgreSQL instance works.
 
-- **Root**: Workspace management, global configuration, and orchestration scripts.
-- **`backend/`**: Node.js/Express/TypeScript API.
-  - **Database**: PostgreSQL (via `@neondatabase/serverless`).
-  - **Scoring Engine**: Pure logic for calculating partial credit.
-- **`frontend/`**: React/TypeScript SPA.
-  - **Build Tool**: Vite.
-  - **DND Logic**: `@dnd-kit` for accessible, performant sorting.
+## 🚀 Quick Start
 
----
+### 1. Clone & Install
 
-## 🧮 Proximity Scoring Algorithm
-
-The core value proposition is the "Proximity Score". Instead of binary (Correct/Wrong), we use a linear decay model for points based on position distance.
-
-### Mathematical Model
-For any item $i$:
-$$Distance = |SubmittedPosition_i - CorrectPosition_i|$$
-
-**Point Distribution:**
-- $d = 0$: $100\%$ points
-- $d = 1$: $75\%$ points
-- $d = 2$: $50\%$ points
-- $d = 3$: $25\%$ points
-- $d \ge 4$: $0\%$ points
-
-**Implementation Location**: `backend/src/services/scoringEngine.ts`
-
----
-
-## 💾 Data Model (ERD Summary)
-
-| Entity | Purpose | Key Relationships |
-| :--- | :--- | :--- |
-| **Chapter** | Top-level container (e.g., "Science") | 1:N with Topics |
-| **Topic** | Quizzable unit (e.g., "Water Cycle") | 1:N with Questions |
-| **Question** | Specific ordering challenge | 1:N with QuestionItems |
-| **QuestionItem** | Draggable element with `correct_position` | Part of a Question |
-| **QuizSession** | Tracks student progress through a Topic | References Topic & StudentSession |
-| **StudentAnswer** | Snapshot of a submitted question | Links to QuizSession & Question |
-
----
-
-## 🚦 API Flow for Quiz Sessions
-
-AI tools should follow this sequence to implement or test quiz logic:
-
-1. **Start**: `POST /api/quiz/start` (Initializes `QuizSession`).
-2. **Fetch**: `GET /api/quiz/:sessionId/current` (Retrieves current question + shuffled items).
-3. **Submit**: `POST /api/quiz/:sessionId/submit` (Grades answer, saves to DB, increments `current_question_index`).
-4. **Result**: `GET /api/quiz/:sessionId/results` (Summary of total score and feedback).
-
----
-
-## 🛠️ Development Workflows
-
-### Setup
 ```bash
-npm run setup    # Installs root and workspace dependencies
-npm run db:migrate # Set up schema
-npm run seed     # Populate with sample chapters/questions
+# Clone the repository
+git clone <repository-url>
+cd quizez-app
+
+# Install dependencies for both frontend and backend (from root)
+npm install
 ```
 
-### Execution
-- **Unified Dev Mode**: `npm run dev` (Runs backend on `:3001` and frontend on `:5173` with proxy).
-- **Production Simulation**: `npm start` (Builds frontend and starts backend to serve it).
+### 2. Environment Setup
 
-### Code Conventions
-- **Naming**: `snake_case` for DB columns, `camelCase` for TypeScript variables/JSON keys.
-- **Safety**: Always use `sql` tagged templates for queries to prevent SQL injection.
-- **Types**: Shared types should be defined in `backend/src/types/index.ts`.
+Create a `.env` file in the `backend/` directory:
+
+```env
+# backend/.env
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
+PORT=3001
+NODE_ENV=development
+```
+
+### 3. Database Setup
+
+Initialize your database schema and seed it with sample data:
+
+```bash
+# Run from the root directory
+npm run db:migrate
+npm run seed
+```
+
+### 4. Run the App
+
+Start both the backend API and frontend dev server concurrently:
+
+```bash
+# Run from the root directory
+npm run dev
+```
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3001
 
 ---
 
-## 🤖 AI Agent Context
+## 🏗️ Monorepo Structure
 
-When working on this repo, observe these patterns:
-- **Backend Routing**: Check `backend/src/routes/quiz.ts` for session logic.
-- **Frontend State**: `QuizFlowPage.tsx` manages a three-state machine: `loading` | `question` | `feedback`.
-- **Styling**: Uses CSS Variables in `frontend/src/styles/global.css`. Avoid hardcoding hex codes.
+The project is organized as an npm workspace with two main packages:
+
+```
+quizez-app/
+├── package.json          # Root scripts (install, dev, build)
+├── backend/              # Express API
+│   ├── src/
+│   │   ├── database/     # Migrations & connection
+│   │   ├── routes/       # API endpoints
+│   │   └── services/     # Core logic (Scoring Engine)
+│   └── package.json
+└── frontend/             # React App
+    ├── src/
+    │   ├── components/   # Reusable UI (DraggableItem, Layout)
+    │   ├── pages/        # Route views (QuizFlow, Admin)
+    │   └── services/     # API client
+    └── package.json
+```
+
+## 💻 Tech Stack
+
+### Backend
+- **Framework**: Express.js
+- **Language**: TypeScript
+- **Database Driver**: `postgres` (via `postgres.js` style tagged template literals in `connection.ts`)
+- **Dev Tool**: `ts-node-dev` for hot reloading
+
+### Frontend
+- **Framework**: React 18
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS v4
+- **Icons**: Lucide React
+- **Drag & Drop**: `@dnd-kit/core` & `@dnd-kit/sortable`
 
 ---
 
-## 🧪 Testing Strategies
-- **Algorithm Verification**: The scoring engine is pure functions; unit tests should target `gradeSubmission` in `scoringEngine.ts`.
-- **Integration**: Verify session advancement by checking `current_question_index` after a successful `POST /submit`.
+## 🧪 Testing
+
+Currently, manual testing is the primary method.
+- **Admin Panel**: Create/Edit chapters, topics, and questions at `/admin`.
+- **Quiz Flow**: Take a quiz to verify scoring logic and timer.
+- **Results**: Check if the "Proximity Scoring" accurately reflects your answers.
+
+## 📦 Deployment
+
+### Build
+Compile both frontend and backend:
+
+```bash
+npm run start
+```
+*This script builds the frontend to `frontend/dist` and compiles the backend TS to JS.*
+
+### Serve
+The backend is configured to serve the static frontend files in production:
+
+```typescript
+// backend/src/index.ts
+app.use(express.static(path.join(__dirname, '../../frontend/dist')));
+```
+
+---
+
+## 🎨 UI Guidelines
+
+- **Tailwind CSS**: Use utility classes for styling.
+- **Dark Mode**: All components must support dark mode (`dark:` variant).
+- **Icons**: Use `lucide-react` components (e.g., `<BookOpen />`, `<Trophy />`).
+- **Responsiveness**: Mobile-first design. Ensure grids collapse to single columns on small screens.

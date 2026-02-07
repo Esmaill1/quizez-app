@@ -1,5 +1,7 @@
 {
   "name": "quizez-app-frontend",
+  "private": true,
+  "type": "module",
   "version": "1.0.0",
   "description": "Frontend for ordering quiz app with drag-and-drop interface",
   "scripts": {
@@ -12,9 +14,12 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^8.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@tailwindcss/vite": "^4.1.18",
+    "lucide-react": "^0.563.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.1",
+    "tailwindcss": "^4.1.18",
     "uuid": "^9.0.1"
   },
   "devDependencies": {

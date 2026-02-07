@@ -1,13 +1,16 @@
 import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { gradeSubmission, getScoreSummary } from '../services/scoringEngine';
+import { getStudentSessionId, requireStudentSession } from '../middleware/auth';
 
 const router = Router();
 
 // Start a new quiz session for a topic
 router.post('/start', async (req: Request, res: Response) => {
   try {
-    const { topic_id, student_session_id } = req.body;
+    const { topic_id, student_nickname } = req.body;
+    // Prefer session ID from header (secure), fallback to body (legacy/initial claim)
+    const student_session_id = getStudentSessionId(req) || req.body.student_session_id;
     
     if (!topic_id) {
       return res.status(400).json({ error: 'topic_id is required' });
@@ -41,8 +44,8 @@ router.post('/start', async (req: Request, res: Response) => {
     
     // Create quiz session
     const session = await sql`
-      INSERT INTO quiz_sessions (topic_id, student_session_id, total_questions, current_question_index)
-      VALUES (${topic_id}, ${student_session_id}, ${questions.length}, 0)
+      INSERT INTO quiz_sessions (topic_id, student_session_id, student_nickname, total_questions, current_question_index)
+      VALUES (${topic_id}, ${student_session_id}, ${student_nickname || null}, ${questions.length}, 0)
       RETURNING *
     `;
     
@@ -59,21 +62,22 @@ router.post('/start', async (req: Request, res: Response) => {
 });
 
 // Get current question in a quiz session
-router.get('/:sessionId/current', async (req: Request, res: Response) => {
+router.get('/:sessionId/current', requireStudentSession, async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
+    const studentSessionId = getStudentSessionId(req);
     
-    // Get quiz session
+    // Get quiz session and verify ownership
     const sessions = await sql`
       SELECT qs.*, t.name as topic_name, t.chapter_id, c.name as chapter_name
       FROM quiz_sessions qs
       JOIN topics t ON qs.topic_id = t.id
       JOIN chapters c ON t.chapter_id = c.id
-      WHERE qs.id = ${sessionId}
+      WHERE qs.id = ${sessionId} AND qs.student_session_id = ${studentSessionId}
     `;
     
     if (sessions.length === 0) {
-      return res.status(404).json({ error: 'Quiz session not found' });
+      return res.status(404).json({ error: 'Quiz session not found or access denied' });
     }
     
     const session = sessions[0];
@@ -104,7 +108,7 @@ router.get('/:sessionId/current', async (req: Request, res: Response) => {
     
     // Get shuffled items for the question
     let items = await sql`
-      SELECT id, question_id, item_text as text
+      SELECT id, question_id, item_text as text, image_url
       FROM question_items 
       WHERE question_id = ${question.id}
     `;
@@ -131,22 +135,24 @@ router.get('/:sessionId/current', async (req: Request, res: Response) => {
 });
 
 // Submit answer for current question and move to next
-router.post('/:sessionId/submit', async (req: Request, res: Response) => {
+router.post('/:sessionId/submit', requireStudentSession, async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
-    const { submitted_order } = req.body;
+    const { submitted_order, time_taken } = req.body;
+    const studentSessionId = getStudentSessionId(req);
     
     if (!submitted_order || !Array.isArray(submitted_order) || submitted_order.length === 0) {
       return res.status(400).json({ error: 'submitted_order is required' });
     }
     
-    // Get quiz session
+    // Get quiz session and verify ownership
     const sessions = await sql`
-      SELECT * FROM quiz_sessions WHERE id = ${sessionId}
+      SELECT * FROM quiz_sessions 
+      WHERE id = ${sessionId} AND student_session_id = ${studentSessionId}
     `;
     
     if (sessions.length === 0) {
-      return res.status(404).json({ error: 'Quiz session not found' });
+      return res.status(404).json({ error: 'Quiz session not found or access denied' });
     }
     
     const session = sessions[0];
@@ -171,7 +177,7 @@ router.post('/:sessionId/submit', async (req: Request, res: Response) => {
     
     // Get question items
     const items = await sql`
-      SELECT id, question_id, item_text as text, correct_position
+      SELECT id, question_id, item_text as text, image_url, correct_position
       FROM question_items 
       WHERE question_id = ${question.id}
       ORDER BY correct_position ASC
@@ -185,8 +191,15 @@ router.post('/:sessionId/submit', async (req: Request, res: Response) => {
     
     // Save the answer
     const answerResult = await sql`
-      INSERT INTO student_answers (question_id, student_session_id, quiz_session_id, total_score, max_possible_score, percentage)
-      VALUES (${question.id}, ${session.student_session_id}, ${sessionId}, ${gradingResult.totalScore}, ${gradingResult.maxPossibleScore}, ${gradingResult.percentage})
+      INSERT INTO student_answers (
+        question_id, student_session_id, quiz_session_id, 
+        total_score, max_possible_score, percentage, time_taken
+      )
+      VALUES (
+        ${question.id}, ${session.student_session_id}, ${sessionId}, 
+        ${gradingResult.totalScore}, ${gradingResult.maxPossibleScore}, 
+        ${gradingResult.percentage}, ${time_taken || 0}
+      )
       RETURNING *
     `;
     
@@ -232,11 +245,13 @@ router.post('/:sessionId/submit', async (req: Request, res: Response) => {
     res.json({
       questionResult: {
         questionTitle: question.title,
+        explanation: question.explanation,
         score: gradingResult.totalScore,
         maxScore: gradingResult.maxPossibleScore,
         percentage: gradingResult.percentage,
         itemResults: gradingResult.itemResults.map(item => ({
           text: item.itemText,
+          imageUrl: items.find(i => i.id === item.itemId)?.image_url,
           yourPosition: item.submittedPosition,
           correctPosition: item.correctPosition,
           distance: item.distance,
@@ -261,28 +276,29 @@ router.post('/:sessionId/submit', async (req: Request, res: Response) => {
 });
 
 // Get final results for a completed quiz session
-router.get('/:sessionId/results', async (req: Request, res: Response) => {
+router.get('/:sessionId/results', requireStudentSession, async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
+    const studentSessionId = getStudentSessionId(req);
     
-    // Get quiz session
+    // Get quiz session and verify ownership
     const sessions = await sql`
       SELECT qs.*, t.name as topic_name, t.chapter_id, c.name as chapter_name
       FROM quiz_sessions qs
       JOIN topics t ON qs.topic_id = t.id
       JOIN chapters c ON t.chapter_id = c.id
-      WHERE qs.id = ${sessionId}
+      WHERE qs.id = ${sessionId} AND qs.student_session_id = ${studentSessionId}
     `;
     
     if (sessions.length === 0) {
-      return res.status(404).json({ error: 'Quiz session not found' });
+      return res.status(404).json({ error: 'Quiz session not found or access denied' });
     }
     
     const session = sessions[0];
     
     // Get all answers for this quiz session
     const answers = await sql`
-      SELECT sa.*, q.title as question_title, q.order_index
+      SELECT sa.*, q.title as question_title, q.explanation, q.order_index
       FROM student_answers sa
       JOIN questions q ON sa.question_id = q.id
       WHERE sa.quiz_session_id = ${sessionId}
@@ -293,7 +309,7 @@ router.get('/:sessionId/results', async (req: Request, res: Response) => {
     const questionResults = [];
     for (const answer of answers) {
       const itemResults = await sql`
-        SELECT sai.*, qi.item_text as text
+        SELECT sai.*, qi.item_text as text, qi.image_url
         FROM student_answer_items sai
         JOIN question_items qi ON sai.question_item_id = qi.id
         WHERE sai.student_answer_id = ${answer.id}
@@ -302,11 +318,14 @@ router.get('/:sessionId/results', async (req: Request, res: Response) => {
       
       questionResults.push({
         questionTitle: answer.question_title,
+        explanation: answer.explanation,
         score: parseFloat(answer.total_score),
         maxScore: parseFloat(answer.max_possible_score),
         percentage: parseFloat(answer.percentage),
+        timeTaken: answer.time_taken,
         itemResults: itemResults.map(item => ({
           text: item.text,
+          imageUrl: item.image_url,
           yourPosition: item.submitted_position,
           correctPosition: item.correct_position,
           distance: item.distance,
@@ -329,6 +348,7 @@ router.get('/:sessionId/results', async (req: Request, res: Response) => {
       isCompleted: session.is_completed,
       startedAt: session.started_at,
       completedAt: session.completed_at,
+      studentNickname: session.student_nickname,
       summary,
       questionResults,
     });

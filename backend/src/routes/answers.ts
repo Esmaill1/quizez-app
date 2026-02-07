@@ -2,13 +2,16 @@ import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { SubmitAnswerRequest, QuestionItem } from '../types';
 import { gradeSubmission, getScoreSummary, ItemScore } from '../services/scoringEngine';
+import { requireAdmin, getStudentSessionId, requireStudentSession } from '../middleware/auth';
 
 const router = Router();
 
 // POST submit an answer and get grading
 router.post('/submit', async (req: Request, res: Response) => {
   try {
-    const { question_id, student_session_id, submitted_order }: SubmitAnswerRequest = req.body;
+    const { question_id, submitted_order }: SubmitAnswerRequest = req.body;
+    // Prefer secure header session
+    const student_session_id = getStudentSessionId(req) || req.body.student_session_id;
     
     if (!question_id) {
       return res.status(400).json({ error: 'question_id is required' });
@@ -102,9 +105,14 @@ router.post('/submit', async (req: Request, res: Response) => {
 });
 
 // GET answer history for a student session
-router.get('/history/:sessionId', async (req: Request, res: Response) => {
+router.get('/history/:sessionId', requireStudentSession, async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
+    const headerSessionId = getStudentSessionId(req);
+    
+    if (sessionId !== headerSessionId) {
+        return res.status(403).json({ error: 'Access denied: You can only view your own history' });
+    }
     
     const answers = await sql`
       SELECT 
@@ -126,9 +134,10 @@ router.get('/history/:sessionId', async (req: Request, res: Response) => {
 });
 
 // GET detailed result for a specific answer
-router.get('/result/:answerId', async (req: Request, res: Response) => {
+router.get('/result/:answerId', requireStudentSession, async (req: Request, res: Response) => {
   try {
     const { answerId } = req.params;
+    const studentSessionId = getStudentSessionId(req);
     
     const answers = await sql`
       SELECT 
@@ -139,11 +148,11 @@ router.get('/result/:answerId', async (req: Request, res: Response) => {
       FROM student_answers sa
       JOIN questions q ON sa.question_id = q.id
       JOIN chapters c ON q.chapter_id = c.id
-      WHERE sa.id = ${answerId}
+      WHERE sa.id = ${answerId} AND sa.student_session_id = ${studentSessionId}
     `;
     
     if (answers.length === 0) {
-      return res.status(404).json({ error: 'Answer not found' });
+      return res.status(404).json({ error: 'Answer not found or access denied' });
     }
     
     const answer = answers[0];
@@ -183,7 +192,7 @@ router.get('/result/:answerId', async (req: Request, res: Response) => {
 });
 
 // GET stats for a question (admin view)
-router.get('/stats/:questionId', async (req: Request, res: Response) => {
+router.get('/stats/:questionId', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { questionId } = req.params;
     

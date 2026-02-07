@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
+import { requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -70,8 +71,34 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
+// GET leaderboard for a topic
+router.get('/:id/leaderboard', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const leaderboard = await sql`
+      SELECT 
+        student_nickname, 
+        total_score, 
+        max_possible_score, 
+        percentage, 
+        completed_at,
+        (SELECT SUM(time_taken) FROM student_answers WHERE quiz_session_id = qs.id) as total_time
+      FROM quiz_sessions qs
+      WHERE topic_id = ${id} AND is_completed = TRUE
+      ORDER BY percentage DESC, completed_at ASC
+      LIMIT 10
+    `;
+    
+    res.json(leaderboard);
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
 // POST create new topic
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { chapter_id, name, description } = req.body;
     
@@ -111,7 +138,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT update topic
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description, order_index } = req.body;
@@ -138,7 +165,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE topic
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     

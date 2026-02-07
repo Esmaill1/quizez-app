@@ -1,5 +1,33 @@
 const API_BASE = '/api';
 
+const TOKEN_KEY = 'quiz_admin_token';
+
+// Admin Login
+export async function login(username: string, password: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Login failed');
+  }
+  
+  const data = await res.json();
+  localStorage.setItem(TOKEN_KEY, data.token);
+  return data;
+}
+
+export function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+export function isAuthenticated() {
+  return !!localStorage.getItem(TOKEN_KEY);
+}
+
 export interface Chapter {
   id: string;
   name: string;
@@ -26,6 +54,10 @@ export interface Question {
   topic_id: string;
   title: string;
   description?: string;
+  explanation?: string;
+  time_limit?: number;
+  difficulty: 'easy' | 'medium' | 'hard';
+  tags?: string[];
   topic_name?: string;
   chapter_name?: string;
   order_index: number;
@@ -37,11 +69,13 @@ export interface QuestionItem {
   id: string;
   question_id: string;
   text: string;
+  image_url?: string;
   correct_position?: number;
 }
 
 export interface SubmissionResult {
   answerId: string;
+  explanation?: string;
   score: {
     earned: number;
     maximum: number;
@@ -58,6 +92,7 @@ export interface SubmissionResult {
 export interface ItemResult {
   itemId: string;
   text: string;
+  imageUrl?: string;
   yourPosition: number;
   correctPosition: number;
   distance: number;
@@ -70,6 +105,7 @@ export interface QuizSession {
   id: string;
   topic_id: string;
   student_session_id: string;
+  student_nickname?: string;
   current_question_index: number;
   total_questions: number;
   scores: QuestionScore[];
@@ -100,21 +136,49 @@ export interface QuizResults {
 export interface QuestionResultDetail {
   question_id: string;
   question_title: string;
+  explanation?: string;
   earned: number;
   maximum: number;
   percentage: number;
+  timeTaken?: number;
   items: ItemResult[];
+}
+
+export interface LeaderboardEntry {
+  student_nickname: string;
+  total_score: number;
+  max_possible_score: number;
+  percentage: number;
+  completed_at: string;
+  total_time: number;
+}
+
+// Helper to get headers
+function getHeaders(admin = false) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-student-session': getStudentSessionSync() || '',
+  };
+  
+  if (admin) {
+    const token = localStorage.getItem(TOKEN_KEY);
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  
+  return headers;
 }
 
 // Chapters API
 export async function getChapters(): Promise<Chapter[]> {
-  const res = await fetch(`${API_BASE}/chapters`);
+  const res = await fetch(`${API_BASE}/chapters`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Failed to fetch chapters');
   return res.json();
 }
 
-export async function getChapter(id: string): Promise<Chapter & { questions: Question[] }> {
-  const res = await fetch(`${API_BASE}/chapters/${id}`);
+export async function getChapter(id: string): Promise<Chapter & { topics: Topic[] }> {
+  const res = await fetch(`${API_BASE}/chapters/${id}`, { headers: getHeaders() });
   if (!res.ok) throw new Error('Failed to fetch chapter');
   return res.json();
 }
@@ -122,7 +186,7 @@ export async function getChapter(id: string): Promise<Chapter & { questions: Que
 export async function createChapter(data: { name: string; description?: string }): Promise<Chapter> {
   const res = await fetch(`${API_BASE}/chapters`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(true),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create chapter');
@@ -130,35 +194,58 @@ export async function createChapter(data: { name: string; description?: string }
 }
 
 export async function deleteChapter(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/chapters/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/chapters/${id}`, { 
+    method: 'DELETE',
+    headers: getHeaders(true)
+  });
   if (!res.ok) throw new Error('Failed to delete chapter');
 }
 
 // Questions API
-export async function getQuestions(chapterId?: string): Promise<Question[]> {
-  const url = chapterId 
-    ? `${API_BASE}/questions?chapter_id=${chapterId}`
-    : `${API_BASE}/questions`;
-  const res = await fetch(url);
+export async function getQuestions(params?: { 
+  chapter_id?: string; 
+  topic_id?: string;
+  difficulty?: string;
+  tag?: string;
+}): Promise<Question[]> {
+  const query = new URLSearchParams();
+  if (params?.chapter_id) query.append('chapter_id', params.chapter_id);
+  if (params?.topic_id) query.append('topic_id', params.topic_id);
+  if (params?.difficulty) query.append('difficulty', params.difficulty);
+  if (params?.tag) query.append('tag', params.tag);
+
+  const url = `${API_BASE}/questions?${query.toString()}`;
+  const res = await fetch(url, { headers: getHeaders() });
   if (!res.ok) throw new Error('Failed to fetch questions');
   return res.json();
 }
 
 export async function getQuestion(id: string, shuffle = true): Promise<Question> {
-  const res = await fetch(`${API_BASE}/questions/${id}?shuffle=${shuffle}`);
+  const res = await fetch(`${API_BASE}/questions/${id}?shuffle=${shuffle}`, {
+    headers: getHeaders()
+  });
   if (!res.ok) throw new Error('Failed to fetch question');
   return res.json();
 }
 
+export interface CreateQuestionItemInput {
+  text: string;
+  image_url?: string;
+}
+
 export async function createQuestion(data: {
-  chapter_id: string;
+  topic_id: string;
   title: string;
   description?: string;
-  items: string[];
+  explanation?: string;
+  time_limit?: number;
+  difficulty?: string;
+  tags?: string[];
+  items: (string | CreateQuestionItemInput)[];
 }): Promise<Question> {
   const res = await fetch(`${API_BASE}/questions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(true),
     body: JSON.stringify(data),
   });
   if (!res.ok) {
@@ -169,7 +256,10 @@ export async function createQuestion(data: {
 }
 
 export async function deleteQuestion(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/questions/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/questions/${id}`, { 
+    method: 'DELETE',
+    headers: getHeaders(true)
+  });
   if (!res.ok) throw new Error('Failed to delete question');
 }
 
@@ -178,38 +268,43 @@ export async function submitAnswer(data: {
   question_id: string;
   student_session_id: string;
   submitted_order: string[];
+  time_taken?: number;
 }): Promise<SubmissionResult> {
   const res = await fetch(`${API_BASE}/answers/submit`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to submit answer');
   return res.json();
 }
 
-export async function getAnswerResult(answerId: string): Promise<any> {
-  const res = await fetch(`${API_BASE}/answers/result/${answerId}`);
-  if (!res.ok) throw new Error('Failed to fetch result');
-  return res.json();
-}
-
-export async function getAnswerHistory(sessionId: string): Promise<any[]> {
-  const res = await fetch(`${API_BASE}/answers/history/${sessionId}`);
-  if (!res.ok) throw new Error('Failed to fetch history');
-  return res.json();
-}
-
 // Session management
 const SESSION_KEY = 'quiz_student_session';
 
-export function getStudentSession(): string {
+function getStudentSessionSync(): string | null {
+  return localStorage.getItem(SESSION_KEY);
+}
+
+export async function getStudentSession(): Promise<string> {
   let session = localStorage.getItem(SESSION_KEY);
   if (!session) {
-    session = `student_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem(SESSION_KEY, session);
+    try {
+      const res = await fetch(`${API_BASE}/auth/session`);
+      if (res.ok) {
+        const data = await res.json();
+        session = data.sessionId;
+        localStorage.setItem(SESSION_KEY, session!);
+      } else {
+        session = `student_${Date.now()}`;
+        localStorage.setItem(SESSION_KEY, session);
+      }
+    } catch (e) {
+      session = `student_${Date.now()}`;
+      localStorage.setItem(SESSION_KEY, session);
+    }
   }
-  return session;
+  return session!;
 }
 
 // Topics API
@@ -217,14 +312,24 @@ export async function getTopics(chapterId?: string): Promise<Topic[]> {
   const url = chapterId 
     ? `${API_BASE}/topics?chapter_id=${chapterId}`
     : `${API_BASE}/topics`;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: getHeaders() });
   if (!res.ok) throw new Error('Failed to fetch topics');
   return res.json();
 }
 
-export async function getTopic(id: string): Promise<Topic> {
-  const res = await fetch(`${API_BASE}/topics/${id}`);
+export async function getTopic(id: string): Promise<Topic & { questions: Question[] }> {
+  const res = await fetch(`${API_BASE}/topics/${id}`, {
+    headers: getHeaders()
+  });
   if (!res.ok) throw new Error('Failed to fetch topic');
+  return res.json();
+}
+
+export async function getLeaderboard(topicId: string): Promise<LeaderboardEntry[]> {
+  const res = await fetch(`${API_BASE}/topics/${topicId}/leaderboard`, {
+    headers: getHeaders()
+  });
+  if (!res.ok) throw new Error('Failed to fetch leaderboard');
   return res.json();
 }
 
@@ -235,7 +340,7 @@ export async function createTopic(data: {
 }): Promise<Topic> {
   const res = await fetch(`${API_BASE}/topics`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(true),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create topic');
@@ -243,18 +348,24 @@ export async function createTopic(data: {
 }
 
 export async function deleteTopic(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/topics/${id}`, { method: 'DELETE' });
+  const res = await fetch(`${API_BASE}/topics/${id}`, { 
+    method: 'DELETE',
+    headers: getHeaders(true) 
+  });
   if (!res.ok) throw new Error('Failed to delete topic');
 }
 
 // Quiz Session API
-export async function startQuiz(topicId: string): Promise<{ id: string; totalQuestions: number }> {
+export async function startQuiz(topicId: string, nickname?: string): Promise<{ id: string; totalQuestions: number }> {
+  const sessionId = await getStudentSession();
+  
   const res = await fetch(`${API_BASE}/quiz/start`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getHeaders(),
     body: JSON.stringify({ 
       topic_id: topicId, 
-      student_session_id: getStudentSession() 
+      student_session_id: sessionId,
+      student_nickname: nickname
     }),
   });
   if (!res.ok) {
@@ -262,7 +373,6 @@ export async function startQuiz(topicId: string): Promise<{ id: string; totalQue
     throw new Error(error.error || 'Failed to start quiz');
   }
   const data = await res.json();
-  // Map quizSessionId to id for consistency
   return {
     id: data.quizSessionId,
     totalQuestions: data.totalQuestions,
@@ -274,40 +384,43 @@ export async function getCurrentQuestion(sessionId: string): Promise<{
   questionNumber: number;
   totalQuestions: number;
 }> {
-  const res = await fetch(`${API_BASE}/quiz/${sessionId}/current`);
+  const res = await fetch(`${API_BASE}/quiz/${sessionId}/current`, {
+    headers: getHeaders()
+  });
   if (!res.ok) throw new Error('Failed to fetch current question');
   const data = await res.json();
   
-  // Check if quiz is completed
   if (data.isCompleted) {
     throw new Error('QUIZ_COMPLETED');
   }
   
-  // Map backend response to frontend interface
   return {
     question: data.question,
-    questionNumber: data.currentQuestionIndex + 1, // Convert 0-indexed to 1-indexed
+    questionNumber: data.currentQuestionIndex + 1,
     totalQuestions: data.totalQuestions,
   };
 }
 
-export async function submitQuizAnswer(sessionId: string, submittedOrder: string[]): Promise<{
+export async function submitQuizAnswer(sessionId: string, submittedOrder: string[], timeTaken?: number): Promise<{
   result: SubmissionResult;
   isComplete: boolean;
   nextQuestion?: number;
 }> {
   const res = await fetch(`${API_BASE}/quiz/${sessionId}/submit`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ submitted_order: submittedOrder }),
+    headers: getHeaders(),
+    body: JSON.stringify({ 
+      submitted_order: submittedOrder,
+      time_taken: timeTaken
+    }),
   });
   if (!res.ok) throw new Error('Failed to submit answer');
   const data = await res.json();
   
-  // Map backend response to frontend interface
   return {
     result: {
-      answerId: sessionId, // Use sessionId as reference
+      answerId: sessionId,
+      explanation: data.questionResult.explanation,
       score: {
         earned: data.questionResult.score,
         maximum: data.questionResult.maxScore,
@@ -315,8 +428,9 @@ export async function submitQuizAnswer(sessionId: string, submittedOrder: string
       },
       summary: getScoreSummary(data.questionResult.percentage),
       itemResults: data.questionResult.itemResults.map((item: any) => ({
-        itemId: item.text, // Use text as identifier
+        itemId: item.text,
         text: item.text,
+        imageUrl: item.imageUrl,
         yourPosition: item.yourPosition,
         correctPosition: item.correctPosition,
         distance: item.distance,
@@ -330,7 +444,6 @@ export async function submitQuizAnswer(sessionId: string, submittedOrder: string
   };
 }
 
-// Helper function to generate score summary
 function getScoreSummary(percentage: number): { emoji: string; message: string; encouragement: string } {
   if (percentage >= 90) {
     return { emoji: '🏆', message: 'Excellent!', encouragement: 'Outstanding work!' };
@@ -346,16 +459,18 @@ function getScoreSummary(percentage: number): { emoji: string; message: string; 
 }
 
 export async function getQuizResults(sessionId: string): Promise<QuizResults> {
-  const res = await fetch(`${API_BASE}/quiz/${sessionId}/results`);
+  const res = await fetch(`${API_BASE}/quiz/${sessionId}/results`, {
+    headers: getHeaders()
+  });
   if (!res.ok) throw new Error('Failed to fetch results');
   const data = await res.json();
   
-  // Map backend response to frontend interface
   return {
     session: {
       id: data.quizSessionId,
-      topic_id: '', // Not needed for display
+      topic_id: '',
       student_session_id: '',
+      student_nickname: data.studentNickname,
       current_question_index: data.totalQuestions,
       total_questions: data.totalQuestions,
       scores: [],
@@ -370,14 +485,17 @@ export async function getQuizResults(sessionId: string): Promise<QuizResults> {
       percentage: data.percentage,
     },
     questions: data.questionResults.map((q: any) => ({
-      question_id: q.questionTitle, // Use title as identifier
+      question_id: q.questionTitle,
       question_title: q.questionTitle,
+      explanation: q.explanation,
       earned: q.score,
       maximum: q.maxScore,
       percentage: q.percentage,
+      timeTaken: q.timeTaken,
       items: q.itemResults.map((item: any) => ({
         itemId: item.text,
         text: item.text,
+        imageUrl: item.imageUrl,
         yourPosition: item.yourPosition,
         correctPosition: item.correctPosition,
         distance: item.distance,

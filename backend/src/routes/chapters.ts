@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { Chapter, CreateChapterRequest } from '../types';
+import { requireAdmin } from '../middleware/auth';
 
 const router = Router();
 
@@ -56,7 +57,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // POST create new chapter
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { name, description }: CreateChapterRequest = req.body;
     
@@ -84,7 +85,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT update chapter
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, description, order_index } = req.body;
@@ -111,7 +112,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE chapter
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     

@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { GripVertical } from 'lucide-react';
 import { QuestionItem } from '../services/api';
-import './DraggableItem.css';
 
 interface DraggableItemProps {
   item: QuestionItem;
@@ -22,27 +22,38 @@ export default function DraggableItem({ item, index }: DraggableItemProps) {
     transform: CSS.Transform.toString(transform),
     // Only use transition for other items moving out of the way, not the dragged item
     transition: isDragging ? undefined : (transition || 'transform 100ms ease'),
-    opacity: isDragging ? 0.95 : 1,
     zIndex: isDragging ? 1000 : 'auto',
-    position: 'relative' as const,
   };
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className={`draggable-item ${isDragging ? 'dragging' : ''}`}
+      className={`relative flex items-center gap-4 p-4 mb-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 hover:shadow-md transition-shadow ${
+        isDragging ? 'opacity-50 ring-2 ring-indigo-500 z-50' : 'opacity-100'
+      }`}
       {...attributes}
-      {...listeners}
     >
-      <div className="item-position">{index + 1}</div>
-      <div className="item-content">
-        <span className="item-text">{item.text}</span>
+      <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-bold rounded-full text-sm">
+        {index + 1}
       </div>
-      <div className="drag-handle">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M7 2a2 2 0 10.001 4.001A2 2 0 007 2zm0 6a2 2 0 10.001 4.001A2 2 0 007 8zm0 6a2 2 0 10.001 4.001A2 2 0 007 14zm6-8a2 2 0 10-.001-4.001A2 2 0 0013 6zm0 2a2 2 0 10.001 4.001A2 2 0 0013 8zm0 6a2 2 0 10.001 4.001A2 2 0 0013 14z" />
-        </svg>
+      
+      <div className="flex-grow flex items-center gap-4 min-w-0">
+        {item.image_url && (
+          <div className="flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+            <img src={item.image_url} alt={item.text} className="w-full h-full object-cover" />
+          </div>
+        )}
+        <span className="truncate text-gray-800 dark:text-gray-200 font-medium">
+          {item.text}
+        </span>
+      </div>
+
+      <div 
+        {...listeners} 
+        className="flex-shrink-0 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-grab active:cursor-grabbing"
+      >
+        <GripVertical className="w-5 h-5" />
       </div>
     </div>
   );
