@@ -64,6 +64,7 @@ export default function AdminPage() {
 
   // AI Generator state
   const [aiTopic, setAiTopic] = useState('');
+  const [aiFile, setAiFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
   const [selectedModel, setSelectedModel] = useState('llama3.2');
   const [availableModels, setAvailableModels] = useState<string[]>(['llama3.2', 'deepseek-v3.1:671b-cloud', 'gemma3:27b-cloud', 'gpt-oss:20b-cloud']);
@@ -73,11 +74,11 @@ export default function AdminPage() {
   }, []);
 
   async function handleAIGenerate() {
-    if (!aiTopic.trim()) return showMessage('error', 'Enter a topic for the AI');
+    if (!aiTopic.trim() && !aiFile) return showMessage('error', 'Enter a topic or upload a PDF for the AI');
     
     try {
       setGenerating(true);
-      const result = await generateAIQuestion(aiTopic, selectedModel);
+      const result = await generateAIQuestion(aiFile || aiTopic, selectedModel);
       
       setQuestionTitle(result.title);
       setQuestionExpl(result.explanation);
@@ -87,6 +88,7 @@ export default function AdminPage() {
       
       showMessage('success', `AI (${selectedModel}) generated the question fields!`);
       setAiTopic('');
+      setAiFile(null);
     } catch (err: any) {
       showMessage('error', err.message || 'AI generation failed');
     } finally {
@@ -362,23 +364,53 @@ export default function AdminPage() {
                   AI Magic Generator
                 </h3>
                 <div className="flex flex-col gap-3">
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <input 
-                      className={`${inputClasses} flex-grow`} 
+                      className={`${inputClasses} flex-grow min-w-[200px]`} 
                       placeholder="e.g. Life cycle of a butterfly..." 
                       value={aiTopic}
                       onChange={(e) => setAiTopic(e.target.value)}
-                      disabled={generating}
+                      disabled={generating || !!aiFile}
                     />
-                    <button 
-                      onClick={handleAIGenerate}
-                      disabled={generating}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2 flex-shrink-0"
-                    >
-                      {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      Generate
-                    </button>
+                    
+                    <div className="flex gap-2">
+                      <label className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold cursor-pointer transition-all border-2 border-dashed ${
+                        aiFile 
+                          ? 'bg-indigo-600 text-white border-transparent' 
+                          : 'bg-white dark:bg-gray-900 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:border-indigo-400'
+                      }`}>
+                        <FileText className="w-4 h-4" />
+                        <span className="text-xs">{aiFile ? 'PDF Added' : 'Upload PDF'}</span>
+                        <input 
+                          type="file" 
+                          className="hidden" 
+                          accept="application/pdf"
+                          onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                          disabled={generating}
+                        />
+                      </label>
+
+                      <button 
+                        onClick={handleAIGenerate}
+                        disabled={generating || (!aiTopic.trim() && !aiFile)}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2"
+                      >
+                        {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                        Generate
+                      </button>
+                    </div>
                   </div>
+
+                  {aiFile && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-gray-900 rounded-lg border border-indigo-100 dark:border-indigo-800 w-fit animate-in zoom-in-95">
+                      <FileText className="w-3 h-3 text-indigo-500" />
+                      <span className="text-[10px] font-bold text-gray-600 dark:text-gray-400 truncate max-w-[150px]">{aiFile.name}</span>
+                      <button onClick={() => setAiFile(null)} className="p-1 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2">
                     <label className="text-[10px] font-black text-indigo-600/60 dark:text-indigo-400/60 uppercase">Model:</label>
                     <select 

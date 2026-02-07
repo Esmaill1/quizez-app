@@ -1,7 +1,7 @@
 import cache from './cache';
 
 const OLLAMA_API_URL = 'https://ollama.com/api/generate';
-const DEFAULT_MODEL = 'llama3.2'; 
+const DEFAULT_MODEL = 'ministral-3:8b'; 
 const API_KEY = process.env.OLLAMA_API_KEY;
 
 export interface AIGeneratedQuestion {
@@ -45,28 +45,46 @@ export async function listAIModels(): Promise<string[]> {
 /**
  * Generates an ordering question using Ollama Cloud
  */
-export async function generateAIQuestion(topic: string, model: string = DEFAULT_MODEL): Promise<AIGeneratedQuestion> {
-  console.log(`🤖 Generating AI question for: "${topic}" using ${model}...`);
+export async function generateAIQuestion(promptContext: string, model: string = DEFAULT_MODEL): Promise<AIGeneratedQuestion> {
+  console.log(`🤖 Generating AI question using ${model}...`);
 
   if (!API_KEY) {
     throw new Error('OLLAMA_API_KEY is not configured.');
   }
 
-  const prompt = `
-    Create a JSON ordering quiz about "${topic}".
-    The items must have a clear logical/chronological sequence.
-    
-    Response MUST be ONLY JSON:
-    {
-      "title": "Question Title",
-      "items": ["First Item", "Second", "Third", "Fourth"],
-      "explanation": "Why this order is correct",
-      "difficulty": "easy" | "medium" | "hard",
-      "tags": ["tag1", "tag2"]
-    }
+  const isLongContext = promptContext.length > 500;
+  
+  const prompt = isLongContext 
+    ? `
+      Below is text from a document. Find a logical process, sequence, or chronological set of events within this text and create an ordering quiz question about it.
+      
+      Document Content:
+      "${promptContext.substring(0, 10000)}" 
 
-    Constraints: 4-6 items in CORRECT order.
-  `;
+      Response MUST be ONLY JSON:
+      {
+        "title": "Clear title for the sequence found",
+        "items": ["First step/event", "Second", "Third", "Fourth", "Fifth"],
+        "explanation": "Brief explanation of the sequence based on the text",
+        "difficulty": "easy" | "medium" | "hard",
+        "tags": ["extracted", "document"]
+      }
+      Constraints: 4-6 items in CORRECT order.
+    `
+    : `
+      Create a JSON ordering quiz about "${promptContext}".
+      The items must have a clear logical/chronological sequence.
+      
+      Response MUST be ONLY JSON:
+      {
+        "title": "Question Title",
+        "items": ["First Item", "Second", "Third", "Fourth"],
+        "explanation": "Why this order is correct",
+        "difficulty": "easy" | "medium" | "hard",
+        "tags": ["tag1", "tag2"]
+      }
+      Constraints: 4-6 items in CORRECT order.
+    `;
 
   try {
     const response = await fetch(OLLAMA_API_URL, {

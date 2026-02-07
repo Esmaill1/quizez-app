@@ -37,11 +37,26 @@ export async function getAIModels(): Promise<string[]> {
   return res.json();
 }
 
-export async function generateAIQuestion(topic: string, model?: string): Promise<any> {
+export async function generateAIQuestion(context: string | File, model?: string): Promise<any> {
+  const formData = new FormData();
+  if (typeof context === 'string') {
+    formData.append('topic', context);
+  } else {
+    formData.append('file', context);
+  }
+  
+  if (model) {
+    formData.append('model', model);
+  }
+
+  const headers = getHeaders(true);
+  // Important: Remove Content-Type so browser sets it correctly with boundary for FormData
+  delete headers['Content-Type'];
+
   const res = await fetch(`${API_BASE}/ai/generate`, {
     method: 'POST',
-    headers: getHeaders(true),
-    body: JSON.stringify({ topic, model }),
+    headers: headers,
+    body: formData,
   });
   
   if (!res.ok) {
