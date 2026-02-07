@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { requireAdmin } from '../middleware/auth';
+import cache, { CACHE_KEYS, invalidateContentCache } from '../services/cache';
 
 const router = Router();
 
@@ -8,6 +9,9 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { chapter_id } = req.query;
+    const cacheKey = chapter_id ? `topics_ch_${chapter_id}` : CACHE_KEYS.TOPICS;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
     
     let topics;
     if (chapter_id) {
@@ -29,6 +33,7 @@ router.get('/', async (req: Request, res: Response) => {
       `;
     }
     
+    cache.set(cacheKey, topics);
     res.json(topics);
   } catch (error) {
     console.error('Error fetching topics:', error);
@@ -40,6 +45,9 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const cacheKey = CACHE_KEYS.TOPIC_DETAIL(id);
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
     
     const topics = await sql`
       SELECT t.*, c.name as chapter_name
@@ -60,21 +68,27 @@ router.get('/:id', async (req: Request, res: Response) => {
       ORDER BY q.order_index ASC, q.created_at ASC
     `;
     
-    res.json({
+    const result = {
       ...topics[0],
       questions,
       questionCount: questions.length,
-    });
+    };
+
+    cache.set(cacheKey, result);
+    res.json(result);
   } catch (error) {
     console.error('Error fetching topic:', error);
     res.status(500).json({ error: 'Failed to fetch topic' });
   }
 });
 
-// GET leaderboard for a topic
+// GET leaderboard for a topic (Cached for 60 seconds)
 router.get('/:id/leaderboard', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const cacheKey = CACHE_KEYS.LEADERBOARD(id);
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
     
     const leaderboard = await sql`
       SELECT 
@@ -90,6 +104,7 @@ router.get('/:id/leaderboard', async (req: Request, res: Response) => {
       LIMIT 10
     `;
     
+    cache.set(cacheKey, leaderboard, 60); // Short TTL for leaderboard
     res.json(leaderboard);
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
@@ -130,6 +145,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
       RETURNING *
     `;
     
+    invalidateContentCache();
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating topic:', error);
@@ -157,6 +173,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
     
+    invalidateContentCache();
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating topic:', error);
@@ -178,6 +195,7 @@ router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Topic not found' });
     }
     
+    invalidateContentCache();
     res.json({ message: 'Topic deleted successfully', topic: result[0] });
   } catch (error) {
     console.error('Error deleting topic:', error);

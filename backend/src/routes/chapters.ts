@@ -2,12 +2,16 @@ import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { Chapter, CreateChapterRequest } from '../types';
 import { requireAdmin } from '../middleware/auth';
+import cache, { CACHE_KEYS, invalidateContentCache } from '../services/cache';
 
 const router = Router();
 
 // GET all chapters with topic count
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const cachedData = cache.get(CACHE_KEYS.CHAPTERS);
+    if (cachedData) return res.json(cachedData);
+
     const chapters = await sql`
       SELECT c.*, 
              COALESCE(COUNT(t.id), 0)::int as topic_count
@@ -16,6 +20,8 @@ router.get('/', async (req: Request, res: Response) => {
       GROUP BY c.id
       ORDER BY c.order_index ASC, c.created_at ASC
     `;
+    
+    cache.set(CACHE_KEYS.CHAPTERS, chapters);
     res.json(chapters);
   } catch (error) {
     console.error('Error fetching chapters:', error);
@@ -27,6 +33,9 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const cacheKey = CACHE_KEYS.CHAPTER_DETAIL(id);
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
     
     const chapters = await sql`
       SELECT * FROM chapters WHERE id = ${id}
@@ -46,10 +55,13 @@ router.get('/:id', async (req: Request, res: Response) => {
       ORDER BY t.order_index ASC, t.created_at ASC
     `;
     
-    res.json({
+    const result = {
       ...chapters[0],
       topics,
-    });
+    };
+
+    cache.set(cacheKey, result);
+    res.json(result);
   } catch (error) {
     console.error('Error fetching chapter:', error);
     res.status(500).json({ error: 'Failed to fetch chapter' });
@@ -77,6 +89,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
       RETURNING *
     `;
     
+    invalidateContentCache();
     res.status(201).json(result[0]);
   } catch (error) {
     console.error('Error creating chapter:', error);
@@ -104,6 +117,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Chapter not found' });
     }
     
+    invalidateContentCache();
     res.json(result[0]);
   } catch (error) {
     console.error('Error updating chapter:', error);
@@ -125,6 +139,7 @@ router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Chapter not found' });
     }
     
+    invalidateContentCache();
     res.json({ message: 'Chapter deleted successfully', chapter: result[0] });
   } catch (error) {
     console.error('Error deleting chapter:', error);

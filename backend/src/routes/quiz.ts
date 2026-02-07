@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import sql from '../database/connection';
 import { gradeSubmission, getScoreSummary } from '../services/scoringEngine';
 import { getStudentSessionId, requireStudentSession } from '../middleware/auth';
+import { invalidateLeaderboardCache } from '../services/cache';
 
 const router = Router();
 
@@ -240,6 +241,10 @@ router.post('/:sessionId/submit', requireStudentSession, async (req: Request, re
         completed_at = ${isCompleted ? new Date().toISOString() : null}
       WHERE id = ${sessionId}
     `;
+    
+    if (isCompleted) {
+      invalidateLeaderboardCache(session.topic_id);
+    }
     
     // Return result for this question
     res.json({

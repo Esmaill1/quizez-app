@@ -6,6 +6,7 @@ import {
   CreateQuestionItemInput,
 } from "../types";
 import { requireAdmin } from "../middleware/auth";
+import cache, { CACHE_KEYS, invalidateContentCache } from "../services/cache";
 
 const router = Router();
 
@@ -13,6 +14,9 @@ const router = Router();
 router.get("/", async (req: Request, res: Response) => {
   try {
     const { chapter_id, topic_id, difficulty, tag } = req.query;
+    const cacheKey = `questions_list_${chapter_id || 'all'}_${topic_id || 'all'}_${difficulty || 'all'}_${tag || 'all'}`;
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) return res.json(cachedData);
 
     let whereConditions = [];
 
@@ -45,18 +49,8 @@ router.get("/", async (req: Request, res: Response) => {
     }
 
     const questions = await query.then((result) => result).catch(() => []);
-    const sortedQuestions = questions.sort((a, b) => {
-      if (a.c?.order_index !== b.c?.order_index)
-        return (a.c?.order_index || 0) - (b.c?.order_index || 0);
-      if (a.t?.order_index !== b.t?.order_index)
-        return (a.t?.order_index || 0) - (b.t?.order_index || 0);
-      if (a.q?.order_index !== b.q?.order_index)
-        return (a.q?.order_index || 0) - (b.q?.order_index || 0);
-      return (
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-    });
-
+    
+    cache.set(cacheKey, questions);
     res.json(questions);
   } catch (error) {
     console.error("Error fetching questions:", error);
@@ -69,38 +63,49 @@ router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { shuffle } = req.query; // Add ?shuffle=true to get shuffled items
+    
+    const cacheKey = CACHE_KEYS.QUESTION_DETAIL(id);
+    let questionData: any = cache.get(cacheKey);
 
-    const questions = await sql`
-      SELECT q.*, t.name as topic_name, c.name as chapter_name
-      FROM questions q
-      LEFT JOIN topics t ON q.topic_id = t.id
-      LEFT JOIN chapters c ON t.chapter_id = c.id
-      WHERE q.id = ${id}
-    `;
+    if (!questionData) {
+      const questions = await sql`
+        SELECT q.*, t.name as topic_name, c.name as chapter_name
+        FROM questions q
+        LEFT JOIN topics t ON q.topic_id = t.id
+        LEFT JOIN chapters c ON t.chapter_id = c.id
+        WHERE q.id = ${id}
+      `;
 
-    if (questions.length === 0) {
-      return res.status(404).json({ error: "Question not found" });
+      if (questions.length === 0) {
+        return res.status(404).json({ error: "Question not found" });
+      }
+
+      const items = await sql`
+        SELECT id, question_id, item_text as text, image_url, correct_position, created_at
+        FROM question_items 
+        WHERE question_id = ${id}
+        ORDER BY correct_position ASC
+      `;
+
+      questionData = {
+        ...questions[0],
+        items,
+        itemCount: items.length,
+      };
+      
+      cache.set(cacheKey, questionData);
     }
 
-    let items = await sql`
-      SELECT id, question_id, item_text as text, image_url, correct_position, created_at
-      FROM question_items 
-      WHERE question_id = ${id}
-      ORDER BY correct_position ASC
-    `;
-
-    // Shuffle items for student view (don't reveal correct order)
+    // Process for student view if shuffle is requested
     if (shuffle === "true") {
-      items = shuffleArray([...items]);
+      const responseData = { ...questionData };
+      responseData.items = shuffleArray([...questionData.items]);
       // Remove correct_position from response when shuffled
-      items = items.map(({ correct_position, ...item }) => item) as any;
+      responseData.items = responseData.items.map(({ correct_position, ...item }: any) => item);
+      return res.json(responseData);
     }
 
-    res.json({
-      ...questions[0],
-      items,
-      itemCount: items.length,
-    });
+    res.json(questionData);
   } catch (error) {
     console.error("Error fetching question:", error);
     res.status(500).json({ error: "Failed to fetch question" });
@@ -182,6 +187,7 @@ router.post("/", requireAdmin, async (req: Request, res: Response) => {
       createdItems.push(itemResult[0] as QuestionItem);
     }
 
+    invalidateContentCache();
     res.status(201).json({
       ...question,
       items: createdItems,
@@ -245,6 +251,7 @@ router.put("/:id", requireAdmin, async (req: Request, res: Response) => {
         createdItems.push(itemResult[0] as QuestionItem);
       }
 
+      invalidateContentCache();
       return res.json({
         ...result[0],
         items: createdItems,
@@ -259,6 +266,7 @@ router.put("/:id", requireAdmin, async (req: Request, res: Response) => {
       ORDER BY correct_position ASC
     `;
 
+    invalidateContentCache();
     res.json({
       ...result[0],
       items: existingItems,
@@ -283,6 +291,7 @@ router.delete("/:id", requireAdmin, async (req: Request, res: Response) => {
       return res.status(404).json({ error: "Question not found" });
     }
 
+    invalidateContentCache();
     res.json({ message: "Question deleted successfully", question: result[0] });
   } catch (error) {
     console.error("Error deleting question:", error);
