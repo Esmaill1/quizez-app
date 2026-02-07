@@ -66,7 +66,7 @@ export default function AdminPage() {
   const [aiTopic, setAiTopic] = useState('');
   const [aiFile, setAiFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('llama3.2');
+  const [selectedModel, setSelectedModel] = useState('ministral-3:8b');
   const [availableModels, setAvailableModels] = useState<string[]>(['llama3.2', 'deepseek-v3.1:671b-cloud', 'gemma3:27b-cloud', 'gpt-oss:20b-cloud']);
 
   useEffect(() => {
