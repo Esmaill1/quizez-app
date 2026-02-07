@@ -7,13 +7,13 @@ const router = Router();
 // POST /api/ai/generate - Secure AI question generation
 router.post('/generate', requireAdmin, async (req: Request, res: Response) => {
   try {
-    const { topic } = req.body;
+    const { topic, model } = req.body;
 
     if (!topic || topic.trim() === '') {
       return res.status(400).json({ error: 'Topic is required for AI generation' });
     }
 
-    const question = await generateAIQuestion(topic);
+    const question = await generateAIQuestion(topic, model);
     res.json(question);
   } catch (error: any) {
     res.status(500).json({ 

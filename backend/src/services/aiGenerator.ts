@@ -1,7 +1,7 @@
 import cache from './cache';
 
 const OLLAMA_API_URL = 'https://ollama.com/api/generate';
-const MODEL_NAME = 'llama3.2'; // Smaller, faster model perfect for JSON tasks
+const DEFAULT_MODEL = 'llama3.2'; 
 const API_KEY = process.env.OLLAMA_API_KEY;
 
 export interface AIGeneratedQuestion {
@@ -15,8 +15,8 @@ export interface AIGeneratedQuestion {
 /**
  * Generates an ordering question using Ollama Cloud
  */
-export async function generateAIQuestion(topic: string): Promise<AIGeneratedQuestion> {
-  console.log(`🤖 Generating AI question for: "${topic}" using Llama 3.2...`);
+export async function generateAIQuestion(topic: string, model: string = DEFAULT_MODEL): Promise<AIGeneratedQuestion> {
+  console.log(`🤖 Generating AI question for: "${topic}" using ${model}...`);
 
   if (!API_KEY) {
     throw new Error('OLLAMA_API_KEY is not configured.');
@@ -46,7 +46,7 @@ export async function generateAIQuestion(topic: string): Promise<AIGeneratedQues
         'Authorization': `Bearer ${API_KEY}`
       },
       body: JSON.stringify({
-        model: MODEL_NAME,
+        model: model,
         prompt: prompt,
         stream: false,
         format: 'json'

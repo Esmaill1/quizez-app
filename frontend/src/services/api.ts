@@ -29,11 +29,11 @@ export function isAuthenticated() {
 }
 
 // AI Generation API
-export async function generateAIQuestion(topic: string): Promise<any> {
+export async function generateAIQuestion(topic: string, model?: string): Promise<any> {
   const res = await fetch(`${API_BASE}/ai/generate`, {
     method: 'POST',
     headers: getHeaders(true),
-    body: JSON.stringify({ topic }),
+    body: JSON.stringify({ topic, model }),
   });
   
   if (!res.ok) {

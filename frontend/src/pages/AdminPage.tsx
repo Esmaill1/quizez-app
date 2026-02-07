@@ -64,6 +64,7 @@ export default function AdminPage() {
   // AI Generator state
   const [aiTopic, setAiTopic] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama3.2');
 
   useEffect(() => {
     loadData();
@@ -74,7 +75,7 @@ export default function AdminPage() {
     
     try {
       setGenerating(true);
-      const result = await generateAIQuestion(aiTopic);
+      const result = await generateAIQuestion(aiTopic, selectedModel);
       
       setQuestionTitle(result.title);
       setQuestionExpl(result.explanation);
@@ -82,7 +83,7 @@ export default function AdminPage() {
       setQuestionTags(result.tags.join(', '));
       setQuestionItems(result.items.map((text: string) => ({ text, image_url: '' })));
       
-      showMessage('success', 'AI generated the question fields!');
+      showMessage('success', `AI (${selectedModel}) generated the question fields!`);
       setAiTopic('');
     } catch (err: any) {
       showMessage('error', err.message || 'AI generation failed');
@@ -354,22 +355,38 @@ export default function AdminPage() {
                   <Sparkles className="w-4 h-4" />
                   AI Magic Generator
                 </h3>
-                <div className="flex gap-2">
-                  <input 
-                    className={`${inputClasses} flex-grow`} 
-                    placeholder="e.g. Life cycle of a butterfly..." 
-                    value={aiTopic}
-                    onChange={(e) => setAiTopic(e.target.value)}
-                    disabled={generating}
-                  />
-                  <button 
-                    onClick={handleAIGenerate}
-                    disabled={generating}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2 flex-shrink-0"
-                  >
-                    {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    Generate
-                  </button>
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-2">
+                    <input 
+                      className={`${inputClasses} flex-grow`} 
+                      placeholder="e.g. Life cycle of a butterfly..." 
+                      value={aiTopic}
+                      onChange={(e) => setAiTopic(e.target.value)}
+                      disabled={generating}
+                    />
+                    <button 
+                      onClick={handleAIGenerate}
+                      disabled={generating}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2 flex-shrink-0"
+                    >
+                      {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      Generate
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-black text-indigo-600/60 dark:text-indigo-400/60 uppercase">Model:</label>
+                    <select 
+                      className="bg-transparent border-none text-[10px] font-bold text-indigo-600 dark:text-indigo-400 outline-none cursor-pointer"
+                      value={selectedModel}
+                      onChange={(e) => setSelectedModel(e.target.value)}
+                      disabled={generating}
+                    >
+                      <option value="llama3.2">Llama 3.2 (Super Fast)</option>
+                      <option value="deepseek-v3.1:671b-cloud">DeepSeek V3 (High Quality)</option>
+                      <option value="gemma3:27b-cloud">Gemma 3 (Balanced)</option>
+                      <option value="gpt-oss:20b-cloud">GPT-OSS (Efficient)</option>
+                    </select>
+                  </div>
                 </div>
                 <p className="text-[10px] text-indigo-600/60 dark:text-indigo-400/60 mt-2 italic">AI will automatically fill title, items, and explanation.</p>
               </div>
