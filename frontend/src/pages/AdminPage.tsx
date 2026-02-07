@@ -10,6 +10,7 @@ import {
   deleteChapter,
   deleteTopic,
   deleteQuestion,
+  generateAIQuestion,
   Chapter,
   Topic,
   Question,
@@ -24,7 +25,8 @@ import {
   X, 
   CheckCircle, 
   AlertTriangle,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 type Tab = 'chapters' | 'topics' | 'questions';
@@ -59,9 +61,35 @@ export default function AdminPage() {
     { text: '', image_url: '' }
   ]);
 
+  // AI Generator state
+  const [aiTopic, setAiTopic] = useState('');
+  const [generating, setGenerating] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
+
+  async function handleAIGenerate() {
+    if (!aiTopic.trim()) return showMessage('error', 'Enter a topic for the AI');
+    
+    try {
+      setGenerating(true);
+      const result = await generateAIQuestion(aiTopic);
+      
+      setQuestionTitle(result.title);
+      setQuestionExpl(result.explanation);
+      setQuestionDiff(result.difficulty);
+      setQuestionTags(result.tags.join(', '));
+      setQuestionItems(result.items.map((text: string) => ({ text, image_url: '' })));
+      
+      showMessage('success', 'AI generated the question fields!');
+      setAiTopic('');
+    } catch (err: any) {
+      showMessage('error', err.message || 'AI generation failed');
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   async function loadData() {
     try {
@@ -321,6 +349,31 @@ export default function AdminPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-8">
           <div>
             <div className={sectionClasses}>
+              <div className="mb-8 p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800">
+                <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-indigo-700 dark:text-indigo-400 mb-3">
+                  <Sparkles className="w-4 h-4" />
+                  AI Magic Generator
+                </h3>
+                <div className="flex gap-2">
+                  <input 
+                    className={`${inputClasses} flex-grow`} 
+                    placeholder="e.g. Life cycle of a butterfly..." 
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                    disabled={generating}
+                  />
+                  <button 
+                    onClick={handleAIGenerate}
+                    disabled={generating}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl font-bold transition-all shadow-md flex items-center gap-2 flex-shrink-0"
+                  >
+                    {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Generate
+                  </button>
+                </div>
+                <p className="text-[10px] text-indigo-600/60 dark:text-indigo-400/60 mt-2 italic">AI will automatically fill title, items, and explanation.</p>
+              </div>
+
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Create Question</h2>
               <form onSubmit={handleCreateQuestion} className="space-y-5">
                 <div>

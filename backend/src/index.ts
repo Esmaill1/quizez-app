@@ -12,6 +12,7 @@ import questionsRouter from './routes/questions';
 import answersRouter from './routes/answers';
 import quizRouter from './routes/quiz';
 import authRouter from './routes/auth';
+import aiRouter from './routes/ai';
 
 // Load environment variables
 dotenv.config();
@@ -64,6 +65,7 @@ app.use('/api/answers', answersRouter);
 app.use('/api/quiz/start', quizStartLimiter); // Apply stricter limit to quiz starts
 app.use('/api/quiz', quizRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/ai', aiRouter);
 
 // Serve static files from the frontend build
 // In Docker, it's at /app/frontend/dist. Locally, it's at ../../frontend/dist

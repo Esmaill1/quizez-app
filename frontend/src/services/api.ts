@@ -28,6 +28,22 @@ export function isAuthenticated() {
   return !!localStorage.getItem(TOKEN_KEY);
 }
 
+// AI Generation API
+export async function generateAIQuestion(topic: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/ai/generate`, {
+    method: 'POST',
+    headers: getHeaders(true),
+    body: JSON.stringify({ topic }),
+  });
+  
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.message || error.error || 'AI Generation failed');
+  }
+  
+  return res.json();
+}
+
 export interface Chapter {
   id: string;
   name: string;
