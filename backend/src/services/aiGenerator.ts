@@ -1,7 +1,7 @@
 import cache from './cache';
 
-const OLLAMA_API_URL = 'https://api.ollama.com/api/generate';
-const MODEL_NAME = 'llama3.1'; // High-performance model for cloud
+const OLLAMA_API_URL = 'https://ollama.com/api/generate';
+const MODEL_NAME = 'deepseek-v3.1:671b-cloud'; // High-performance cloud model
 const API_KEY = process.env.OLLAMA_API_KEY;
 
 export interface AIGeneratedQuestion {
@@ -16,7 +16,7 @@ export interface AIGeneratedQuestion {
  * Generates an ordering question using Ollama Cloud
  */
 export async function generateAIQuestion(topic: string): Promise<AIGeneratedQuestion> {
-  console.log(`🤖 Generating AI question for topic: "${topic}" using Ollama Cloud...`);
+  console.log(`🤖 Generating AI question for topic: "${topic}" using DeepSeek on Ollama Cloud...`);
 
   if (!API_KEY) {
     throw new Error('OLLAMA_API_KEY is not configured in the environment.');
