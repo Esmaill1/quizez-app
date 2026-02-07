@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import pdf from 'pdf-parse';
+const pdf = require('pdf-parse');
 import { requireAdmin } from '../middleware/auth';
 import { generateAIQuestion, listAIModels } from '../services/aiGenerator';
 
@@ -43,7 +43,5 @@ router.post('/generate', requireAdmin, upload.single('file'), async (req: Reques
     });
   }
 });
-
-export default router;
 
 export default router;
