@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import pdf = require('pdf-parse');
+const { PDFParse } = require('pdf-parse');
 import { requireAdmin } from '../middleware/auth';
 import { generateAIQuestion, listAIModels } from '../services/aiGenerator';
 
@@ -25,12 +25,14 @@ router.post('/generate', requireAdmin, upload.single('file'), async (req: Reques
 
     // If a PDF is uploaded, extract its text
     if (req.file && req.file.mimetype === 'application/pdf') {
-      const pdfParser = typeof pdf === 'function' ? pdf : (pdf as any).default;
-      if (typeof pdfParser !== 'function') {
-        throw new Error('PDF parser library not loaded correctly');
+      try {
+        const parser = new PDFParse({ data: new Uint8Array(req.file.buffer) });
+        const result = await parser.getText();
+        promptContext = result.text;
+      } catch (pdfError: any) {
+        console.error('PDF parsing error:', pdfError);
+        throw new Error(`Failed to parse PDF: ${pdfError.message}`);
       }
-      const pdfData = await pdfParser(req.file.buffer);
-      promptContext = pdfData.text;
     }
 
     if (!promptContext || promptContext.trim() === '') {
